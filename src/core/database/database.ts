@@ -6,6 +6,7 @@ export type NotificationRecord = {
   name: string;
   hours: number;
   dateScheduled: string;
+  browser?: string;
 };
 
 let db: SQLite.SQLiteDatabase | null = null;
@@ -19,9 +20,17 @@ export async function initDatabase() {
       id TEXT PRIMARY KEY NOT NULL,
       name TEXT NOT NULL,
       hours REAL NOT NULL,
-      dateScheduled TEXT NOT NULL
+      dateScheduled TEXT NOT NULL,
+      browser TEXT
     );
   `);
+  
+  // Intentar agregar la columna por si la tabla ya existía antes de esta actualización
+  try {
+    await db.execAsync(`ALTER TABLE pending_notifications ADD COLUMN browser TEXT;`);
+  } catch (e) {
+    // La columna probablemente ya existe
+  }
 }
 
 // Obtener todas las notificaciones pendientes
@@ -31,12 +40,11 @@ export async function getPendingNotifications(): Promise<NotificationRecord[]> {
   return allRows;
 }
 
-// Insertar una nueva notificación
 export async function addNotification(notification: NotificationRecord) {
   if (!db) return;
   await db.runAsync(
-    'INSERT INTO pending_notifications (id, name, hours, dateScheduled) VALUES (?, ?, ?, ?)',
-    [notification.id, notification.name, notification.hours, notification.dateScheduled]
+    'INSERT INTO pending_notifications (id, name, hours, dateScheduled, browser) VALUES (?, ?, ?, ?, ?)',
+    [notification.id, notification.name, notification.hours, notification.dateScheduled, notification.browser || '']
   );
 }
 
