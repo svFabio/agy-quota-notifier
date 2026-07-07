@@ -1,4 +1,4 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from 'expo-router';
+import { DarkTheme, DefaultTheme, ThemeProvider, Slot } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useColorScheme } from 'react-native';
 import { useEffect } from 'react';
@@ -9,13 +9,12 @@ import {
   Montserrat_700Bold 
 } from '@expo-google-fonts/montserrat';
 
+import { ThemeProviderWrapper } from '@/core/contexts/ThemeContext';
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
-import AppTabs from '@/components/app-tabs';
 
 SplashScreen.preventAutoHideAsync();
 
 export default function TabLayout() {
-  const colorScheme = useColorScheme();
   const [fontsLoaded] = useFonts({
     Montserrat_400Regular,
     Montserrat_600SemiBold,
@@ -31,9 +30,9 @@ export default function TabLayout() {
   if (!fontsLoaded) return null;
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+    <ThemeProviderWrapper>
       <AnimatedSplashOverlay />
-      <AppTabs />
-    </ThemeProvider>
+      <Slot />
+    </ThemeProviderWrapper>
   );
 }
