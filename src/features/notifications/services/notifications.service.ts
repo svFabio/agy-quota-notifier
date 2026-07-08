@@ -2,8 +2,8 @@ import * as Notifications from 'expo-notifications';
 import { SchedulableTriggerInputTypes } from 'expo-notifications';
 import * as Device from 'expo-device';
 import { Platform, Alert } from 'react-native';
-import { ENV } from '../core/config/env';
-import { COLORS } from '../core/constants/theme';
+import { ENV } from '../../../core/config/env';
+import { COLORS } from '../../../core/constants/theme';
 
 // Configuración global de cómo se muestran las notificaciones cuando la app está abierta
 export function setupNotifications() {

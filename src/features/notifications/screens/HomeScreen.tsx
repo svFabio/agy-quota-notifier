@@ -4,10 +4,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNotifications } from '../hooks/useNotifications';
 import { NotificationForm } from '../components/NotificationForm';
 import { PendingList } from '../components/PendingList';
-import { useTheme } from '../../../core/constants/theme';
-import { Text } from '../../../components/ui/Text';
-import { AlertModal } from '../../../components/ui/AlertModal';
-import { FAB } from '../../../components/ui/FAB';
+import { useTheme, SIZES } from '../../../core/constants/theme';
+import { Text, AlertModal, FAB } from '../../../components/ui';
 import { Ionicons } from '@expo/vector-icons';
 
 export function HomeScreen() {
@@ -18,6 +16,8 @@ export function HomeScreen() {
     setHours,
     browser,
     setBrowser,
+    model,
+    setModel,
     pendingList,
     handleSchedule,
     handleDelete,
@@ -30,13 +30,13 @@ export function HomeScreen() {
     openForm,
     closeForm
   } = useNotifications();
-  const { colors, toggleTheme, mode } = useTheme();
+  const { colors, toggleTheme, isDark } = useTheme();
 
   if (!isReady) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }, styles.center]}>
         <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={{ marginTop: 10, color: colors.text }}>Cargando datos guardados...</Text>
+        <Text style={{ marginTop: SIZES.base, color: colors.text }}>Cargando datos guardados...</Text>
       </SafeAreaView>
     );
   }
@@ -47,8 +47,8 @@ export function HomeScreen() {
         <Text weight="bold" style={[styles.header, { color: colors.text }]}>Notificador de Tokens</Text>
         <TouchableOpacity style={styles.themeToggle} onPress={toggleTheme}>
           <Ionicons 
-            name={mode === 'dark' ? 'sunny' : mode === 'light' ? 'moon' : 'settings'} 
-            size={24} 
+            name={isDark ? 'sunny' : 'moon'} 
+            size={SIZES.h2} 
             color={colors.text} 
           />
         </TouchableOpacity>
@@ -63,6 +63,8 @@ export function HomeScreen() {
         setHours={setHours}
         browser={browser}
         setBrowser={setBrowser}
+        model={model}
+        setModel={setModel}
         isEditing={isEditing}
         onSubmit={handleSchedule}
         alertConfig={alertConfig}
@@ -94,8 +96,8 @@ export function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    paddingHorizontal: 20,
-    paddingTop: 10,
+    paddingHorizontal: SIZES.padding,
+    paddingTop: SIZES.screenTop,
   },
   center: {
     justifyContent: 'center',
@@ -103,18 +105,16 @@ const styles = StyleSheet.create({
   },
   headerContainer: {
     flexDirection: 'row',
-    justifyContent: 'center',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
-    position: 'relative',
+    marginBottom: SIZES.extraLarge,
   },
   header: {
-    fontSize: 24,
-    textAlign: 'center',
+    fontSize: SIZES.h2,
+    flex: 1,
   },
   themeToggle: {
-    position: 'absolute',
-    right: 0,
-    padding: 5,
+    padding: SIZES.base,
+    marginLeft: SIZES.base,
   },
 });

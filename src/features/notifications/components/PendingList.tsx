@@ -1,36 +1,53 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, FlatList, StyleSheet } from 'react-native';
-import { NotificationRecord } from '../../../core/database/database';
-import { useTheme } from '../../../core/constants/theme';
-import { Text } from '../../../components/ui/Text';
-import { OptionsModal } from '../../../components/ui/OptionsModal';
+import { NotificationRecord } from '../repositories/notifications.repository';
+import { useTheme, SIZES, FONTS } from '../../../core/constants/theme';
+import { Text, OptionsModal } from '../../../components/ui';
 import { TouchableOpacity } from 'react-native';
+import { speak } from '../../../core/services/speech.service';
 
 // Componente inteligente para manejar el tiempo real de cada ítem
-function CountdownItem({ item, onEdit, onDelete }: { item: NotificationRecord, onEdit: (i: NotificationRecord) => void, onDelete: (id: string) => void }) {
+function CountdownItem({ item, onEdit, onDelete, onFinished }: { 
+  item: NotificationRecord, 
+  onEdit: (i: NotificationRecord) => void, 
+  onDelete: (id: string) => void,
+  onFinished: (name: string) => void
+}) {
   const [timeLeft, setTimeLeft] = useState('');
   const [isFinished, setIsFinished] = useState(false);
+  const [progress, setProgress] = useState(0);
   const [modalVisible, setModalVisible] = useState(false);
+  const hasNotified = useRef(false);
   const { colors } = useTheme();
 
   useEffect(() => {
     // Si la data guardada es de una versión vieja (ej. "14:30"), fallará,
     // por lo que intentamos leer el nuevo formato ISO string.
     const targetTimestamp = new Date(item.dateScheduled).getTime();
+    const startTimestamp = targetTimestamp - (item.hours * 3600000);
 
     const updateCountdown = () => {
       const now = Date.now();
       const diff = targetTimestamp - now;
+      const total = targetTimestamp - startTimestamp;
 
       if (isNaN(diff)) {
         setTimeLeft('--:--:--');
         setIsFinished(true);
+        setProgress(0);
         return;
       }
 
       if (diff <= 0) {
         setTimeLeft('00:00:00');
         setIsFinished(true);
+        setProgress(100);
+        // Notificar al padre UNA SOLA VEZ, y solo si terminó hace menos de 10 segundos
+        // Esto evita que hable al abrir la app con cuentas ya vencidas hace rato
+        if (!hasNotified.current && diff > -10000) {
+          hasNotified.current = true;
+          onFinished(item.name.split('@')[0]);
+        }
         return;
       }
 
@@ -39,6 +56,9 @@ function CountdownItem({ item, onEdit, onDelete }: { item: NotificationRecord, o
       const s = Math.floor((diff % (1000 * 60)) / 1000);
 
       setTimeLeft(`${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`);
+      
+      const p = Math.max(0, Math.min(100, ((now - startTimestamp) / total) * 100));
+      setProgress(p);
     };
 
     updateCountdown();
@@ -59,8 +79,12 @@ function CountdownItem({ item, onEdit, onDelete }: { item: NotificationRecord, o
       <View style={styles.itemHeader}>
         <View style={styles.titleContainer}>
           <Text weight="bold" style={styles.itemTitle}>{item.name}</Text>
-          {item.browser ? (
-            <Text style={[styles.browserTag, { color: colors.primary }]}>Navegador: {item.browser}</Text>
+          {item.browser || item.model ? (
+            <Text style={[styles.browserTag, { color: colors.accent }]}>
+              {item.browser && `Navegador: ${item.browser}`}
+              {item.browser && item.model && ' | '}
+              {item.model && `Modelo: ${item.model}`}
+            </Text>
           ) : null}
         </View>
         <TouchableOpacity style={styles.optionsBtn} onPress={() => setModalVisible(true)}>
@@ -68,12 +92,18 @@ function CountdownItem({ item, onEdit, onDelete }: { item: NotificationRecord, o
         </TouchableOpacity>
       </View>
       
-      <Text style={[styles.itemSubtitle, { color: colors.textMuted }]}>
-        Sonará a las: {targetTimeStr}
-      </Text>
-      <Text weight="bold" style={[styles.countdown, { color: dynamicColor }]}>
-        {isFinished ? '¡Tokens listos!' : `Faltan: ${timeLeft}`}
-      </Text>
+      <View style={styles.itemFooter}>
+        <Text style={[styles.itemSubtitle, { color: colors.textMuted }]}>
+          Sonará a las: {targetTimeStr}
+        </Text>
+        <Text weight="bold" style={[styles.countdown, { color: dynamicColor }]}>
+          {isFinished ? 'Tokens listos' : `Faltan: ${timeLeft}`}
+        </Text>
+      </View>
+
+      <View style={[styles.progressBarContainer, { backgroundColor: colors.border }]}>
+        <View style={[styles.progressBar, { backgroundColor: dynamicColor, width: `${progress}%` }]} />
+      </View>
 
       <OptionsModal 
         visible={modalVisible}
@@ -94,15 +124,33 @@ interface PendingListProps {
 export function PendingList({ notifications, onEdit, onDelete }: PendingListProps) {
   const { colors } = useTheme();
   
+  // Cola de cuentas terminadas para hablar de forma agrupada
+  const speechQueue = useRef<string[]>([]);
+  const speechTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleFinished = (name: string) => {
+    speechQueue.current.push(name);
+    if (speechTimer.current) clearTimeout(speechTimer.current);
+    speechTimer.current = setTimeout(() => {
+      const names = speechQueue.current;
+      speechQueue.current = [];
+      if (names.length === 1) {
+        speak(`Jefe, los tokens de la cuenta ${names[0]} están listos.`);
+      } else if (names.length > 1) {
+        speak(`Atención Jefe. ${names.length} cuentas tienen los tokens listos simultáneamente.`);
+      }
+    }, 500);
+  };
+
   const renderItem = ({ item }: { item: NotificationRecord }) => (
-    <CountdownItem item={item} onEdit={onEdit} onDelete={onDelete} />
+    <CountdownItem item={item} onEdit={onEdit} onDelete={onDelete} onFinished={handleFinished} />
   );
 
   // Ordenar: los que tienen el tiempo más viejo (o ya terminados) van primero.
   const sortedNotifications = [...notifications].sort((a, b) => {
     const timeA = new Date(a.dateScheduled).getTime();
     const timeB = new Date(b.dateScheduled).getTime();
-    return timeA - timeB; // Menor tiempo = termina antes (o ya terminó)
+    return timeA - timeB;
   });
 
   return (
@@ -124,16 +172,16 @@ export function PendingList({ notifications, onEdit, onDelete }: PendingListProp
 
 const styles = StyleSheet.create({
   listHeader: {
-    fontSize: 18,
-    marginBottom: 10,
+    fontSize: SIZES.h4,
+    marginBottom: SIZES.base,
   },
   list: {
     flex: 1,
   },
   listItem: {
-    padding: 15,
-    borderRadius: 8,
-    marginBottom: 10,
+    padding: SIZES.medium,
+    borderRadius: SIZES.radius,
+    marginBottom: SIZES.base,
     borderLeftWidth: 5,
     elevation: 1,
   },
@@ -144,34 +192,50 @@ const styles = StyleSheet.create({
   },
   titleContainer: {
     flex: 1,
-    paddingRight: 10,
+    paddingRight: SIZES.base,
   },
   itemTitle: {
-    fontSize: 16,
+    fontSize: SIZES.h3,
+    marginBottom: SIZES.base / 2,
   },
   browserTag: {
-    fontSize: 12,
-    marginTop: 2,
-    fontWeight: '500',
+    fontSize: SIZES.smallText,
+    marginTop: SIZES.base / 4,
+    fontFamily: FONTS.semiBold,
   },
   optionsBtn: {
-    padding: 5,
+    padding: SIZES.base / 2,
   },
   optionsText: {
-    fontSize: 18,
+    fontSize: SIZES.h4,
     letterSpacing: 2,
   },
+  itemFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    marginTop: SIZES.base,
+  },
   itemSubtitle: {
-    fontSize: 14,
-    marginTop: 4,
+    fontSize: SIZES.smallText,
   },
   countdown: {
-    fontSize: 16,
-    marginTop: 8,
+    fontSize: SIZES.smallText,
   },
   emptyText: {
     textAlign: 'center',
-    marginTop: 20,
+    marginTop: SIZES.large,
     fontStyle: 'italic',
+  },
+  progressBarContainer: {
+    height: 4,
+    borderRadius: 2,
+    marginTop: SIZES.base,
+    overflow: 'hidden',
+    width: '100%',
+  },
+  progressBar: {
+    height: '100%',
+    borderRadius: 2,
   },
 });

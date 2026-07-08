@@ -1,7 +1,7 @@
 import React from 'react';
-import { Modal, View, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
+import { View, TouchableOpacity, StyleSheet } from 'react-native';
 import { Text } from './Text';
-import { useTheme } from '../../core/constants/theme';
+import { useTheme, SIZES } from '../../core/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 
 interface AlertModalProps {
@@ -12,6 +12,9 @@ interface AlertModalProps {
   onClose: () => void;
 }
 
+const ICON_SIZE = 32;
+const ICON_CIRCLE_SIZE = 60;
+
 export function AlertModal({ visible, title, message, type = 'error', onClose }: AlertModalProps) {
   const { colors } = useTheme();
 
@@ -21,10 +24,10 @@ export function AlertModal({ visible, title, message, type = 'error', onClose }:
   const iconColor = type === 'error' ? colors.error : colors.primary;
 
   return (
-    <View style={[StyleSheet.absoluteFill, styles.overlay]}>
-      <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
+    <View style={[StyleSheet.absoluteFill, styles.overlay, { backgroundColor: colors.overlay }]}>
+      <View style={[styles.modalContent, { backgroundColor: colors.surface, shadowColor: colors.shadow }]}>
         <View style={[styles.iconCircle, { backgroundColor: iconColor + '20' }]}>
-          <Ionicons name={iconName} size={32} color={iconColor} />
+          <Ionicons name={iconName} size={ICON_SIZE} color={iconColor} />
         </View>
         <Text weight="bold" style={[styles.title, { color: colors.text }]}>{title}</Text>
         <Text style={[styles.message, { color: colors.textMuted }]}>{message}</Text>
@@ -36,59 +39,52 @@ export function AlertModal({ visible, title, message, type = 'error', onClose }:
   );
 }
 
-const { width } = Dimensions.get('window');
-
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
-    zIndex: 999999, // Superponer sobre cualquier otro modal
+    padding: SIZES.large,
+    zIndex: 999999,
     elevation: 999999,
   },
   modalContent: {
     width: '85%',
-    borderRadius: 20,
-    padding: 24,
+    borderRadius: SIZES.large,
+    padding: SIZES.padding,
     alignItems: 'center',
-    shadowColor: '#000',
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.25,
-    shadowRadius: 20,
+    shadowRadius: SIZES.large,
     elevation: 999999,
-    zIndex: 999999, // Asegurar que el contenido también esté por encima
+    zIndex: 999999,
   },
   iconCircle: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    width: ICON_CIRCLE_SIZE,
+    height: ICON_CIRCLE_SIZE,
+    borderRadius: ICON_CIRCLE_SIZE / 2,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 16,
-  },
-  iconText: {
-    fontSize: 32,
+    marginBottom: SIZES.medium,
   },
   title: {
-    fontSize: 20,
-    marginBottom: 10,
+    fontSize: SIZES.h3,
+    marginBottom: SIZES.base,
     textAlign: 'center',
   },
   message: {
-    fontSize: 16,
+    fontSize: SIZES.body1,
     textAlign: 'center',
-    marginBottom: 20,
+    marginBottom: SIZES.large,
     lineHeight: 22,
   },
   button: {
     width: '100%',
-    paddingVertical: 14,
-    borderRadius: 12,
+    paddingVertical: SIZES.body2,
+    borderRadius: SIZES.cardRadius,
     alignItems: 'center',
   },
   buttonText: {
-    fontSize: 16,
+    fontSize: SIZES.body1,
   },
 });

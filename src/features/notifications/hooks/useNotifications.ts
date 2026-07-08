@@ -1,23 +1,24 @@
 import { useState, useEffect } from 'react';
 import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
+import { initDatabase } from '../../../core/database/database';
 import { 
-  initDatabase, 
+  NotificationRecord, 
   getPendingNotifications, 
   addNotification, 
-  removeNotification,
-  NotificationRecord 
-} from '../../../core/database/database';
+  removeNotification 
+} from '../repositories/notifications.repository';
 import { 
   setupNotifications, 
   registerForPushNotificationsAsync, 
   scheduleLocalNotification 
-} from '../../../services/notifications.service';
+} from '../services/notifications.service';
 
 export function useNotifications() {
   const [accountName, setAccountName] = useState('');
   const [hours, setHours] = useState('');
   const [browser, setBrowser] = useState('');
+  const [model, setModel] = useState<'Gemini' | 'Claude' | ''>('');
   const [pendingList, setPendingList] = useState<NotificationRecord[]>([]);
   const [isReady, setIsReady] = useState(false);
   
@@ -48,6 +49,7 @@ export function useNotifications() {
       setHours('');
     }
     setBrowser(item.browser || '');
+    setModel((item.model as 'Gemini' | 'Claude' | '') || '');
     setEditingId(item.id);
     setIsFormVisible(true);
   };
@@ -57,6 +59,7 @@ export function useNotifications() {
     setAccountName('');
     setHours('');
     setBrowser('');
+    setModel('');
     setIsFormVisible(true);
   };
 
@@ -66,6 +69,7 @@ export function useNotifications() {
     setAccountName('');
     setHours('');
     setBrowser('');
+    setModel('');
   };
 
   // Inicializar todo cuando la app carga
@@ -123,6 +127,7 @@ export function useNotifications() {
         hours: parsedHours,
         dateScheduled: targetDate, // Ahora guardamos el tiempo de destino real
         browser: browser.trim(),
+        model: model,
       };
 
       // 3. Guardar en SQLite
@@ -145,6 +150,8 @@ export function useNotifications() {
     setHours,
     browser,
     setBrowser,
+    model,
+    setModel,
     pendingList,
     handleSchedule,
     handleDelete,

@@ -1,14 +1,16 @@
 import React from 'react';
 import { TouchableOpacity, StyleSheet } from 'react-native';
-import { useTheme } from '../../core/constants/theme';
+import { useTheme, SIZES, FONTS } from '../../core/constants/theme';
 import { Text } from './Text';
+
+const FAB_SIZE = 60;
 
 export function FAB({ onPress }: { onPress: () => void }) {
   const { colors } = useTheme();
 
   return (
     <TouchableOpacity style={[styles.fab, { backgroundColor: colors.primary, shadowColor: colors.primary }]} onPress={onPress}>
-      <Text style={[styles.text, { color: colors.surface }]}>+</Text>
+      <Text style={[styles.text, { color: colors.surface, fontFamily: FONTS.bold }]}>+</Text>
     </TouchableOpacity>
   );
 }
@@ -16,11 +18,11 @@ export function FAB({ onPress }: { onPress: () => void }) {
 const styles = StyleSheet.create({
   fab: {
     position: 'absolute',
-    bottom: 30,
-    right: 20,
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    bottom: SIZES.h1,
+    right: SIZES.large,
+    width: FAB_SIZE,
+    height: FAB_SIZE,
+    borderRadius: FAB_SIZE / 2,
     justifyContent: 'center',
     alignItems: 'center',
     elevation: 5,
@@ -30,7 +32,6 @@ const styles = StyleSheet.create({
     zIndex: 100,
   },
   text: {
-    fontSize: 32,
-    fontWeight: 'bold',
+    fontSize: SIZES.h1,
   },
 });
