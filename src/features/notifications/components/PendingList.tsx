@@ -135,9 +135,9 @@ export function PendingList({ notifications, onEdit, onDelete }: PendingListProp
       const names = speechQueue.current;
       speechQueue.current = [];
       if (names.length === 1) {
-        speak(`Jefe, los tokens de la cuenta ${names[0]} están listos.`);
+        speak(`Señor, los tokens de la cuenta ${names[0]} están listos.`);
       } else if (names.length > 1) {
-        speak(`Atención Jefe. ${names.length} cuentas tienen los tokens listos simultáneamente.`);
+        speak(`Atención Señor. ${names.length} cuentas tienen los tokens listos simultáneamente.`);
       }
     }, 500);
   };

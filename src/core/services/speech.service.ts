@@ -1,78 +1,107 @@
-import * as FileSystem from 'expo-file-system';
-import { Audio } from 'expo-av';
+import ReactNativeBlobUtil from 'react-native-blob-util';
 import * as Speech from 'expo-speech';
+import { getSettings } from './settings.service';
 
-const API_KEY = process.env.EXPO_PUBLIC_ELEVENLABS_API_KEY ?? '';
-const VOICE_ID = process.env.EXPO_PUBLIC_ELEVENLABS_VOICE_ID ?? 'pNInz6obpgDQGcFmaJgB';
-const API_URL = `https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}`;
+// Función rápida para hashear el texto y usarlo de nombre de archivo
+function hashCode(str: string): string {
+  let hash = 5381;
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) + hash) + str.charCodeAt(i);
+  }
+  return Math.abs(hash).toString(36);
+}
 
-/**
- * Habla el texto usando ElevenLabs (voz IA de alta calidad).
- * Si no hay API key configurada o falla la red, cae al motor TTS del sistema.
- */
+// Metro a veces empaqueta módulos CommonJS como objetos namespace donde la función constructora es 'default'.
+const Sound = require('react-native-sound');
+Sound.setCategory('Playback', true);
+
+let activeSound: any = null;
+
 export async function speak(text: string): Promise<void> {
-  // Fallback al motor del sistema si no hay API key
-  if (!API_KEY || API_KEY === 'TU_API_KEY_AQUI') {
-    Speech.speak(text, { language: 'es', rate: 0.9, pitch: 0.7 });
+  const settings = await getSettings();
+  const API_KEY = settings.apiKey;
+  const VOICE_ID = settings.voiceId;
+
+  if (!API_KEY) {
+    console.warn('[SpeechService] Sin API key → fallback');
+    fallbackSpeak(text);
     return;
   }
 
   try {
-    const response = await fetch(API_URL, {
-      method: 'POST',
-      headers: {
-        'xi-api-key': API_KEY,
-        'Content-Type': 'application/json',
-        'Accept': 'audio/mpeg',
-      },
-      body: JSON.stringify({
-        text,
-        model_id: 'eleven_multilingual_v2',
-        voice_settings: {
-          stability: 0.5,
-          similarity_boost: 0.75,
-        },
-      }),
-    });
+    const fileUri = `${ReactNativeBlobUtil.fs.dirs.DocumentDir}/jarvis_${VOICE_ID}_${hashCode(text)}.mp3`;
+    const exists = await ReactNativeBlobUtil.fs.exists(fileUri);
 
-    if (!response.ok) {
-      throw new Error(`ElevenLabs error: ${response.status}`);
+    if (exists) {
+      console.log('[JARVIS] Reproduciendo desde caché (Ahorro de API 💰):', fileUri);
+    } else {
+      console.log('[JARVIS] Llamando a ElevenLabs...');
+
+      const res = await ReactNativeBlobUtil.fetch(
+        'POST',
+        `https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}`,
+        {
+          'xi-api-key': API_KEY,
+          'Content-Type': 'application/json',
+          'Accept': 'audio/mpeg',
+        },
+        JSON.stringify({
+          text,
+          model_id: 'eleven_multilingual_v2',
+          voice_settings: { stability: 0.5, similarity_boost: 0.75 },
+        }),
+      );
+
+      const status = res.info().status;
+      if (status !== 200) {
+        throw new Error(`ElevenLabs HTTP ${status}: ${res.text()}`);
+      }
+
+      const base64 = res.base64();
+      if (!base64 || base64.length < 100) {
+        throw new Error('Audio base64 vacío o inválido');
+      }
+
+      await ReactNativeBlobUtil.fs.writeFile(fileUri, base64, 'base64');
     }
 
-    // Convertir la respuesta a base64 y guardarla como archivo temporal
-    const audioBuffer = await response.arrayBuffer();
-    const base64Audio = arrayBufferToBase64(audioBuffer);
-    const fileUri = FileSystem.cacheDirectory + `jarvis_${Date.now()}.mp3`;
+    // Detener sonido anterior
+    if (activeSound) {
+      activeSound.stop(() => { activeSound?.release(); activeSound = null; });
+    }
 
-    await FileSystem.writeAsStringAsync(fileUri, base64Audio, {
-      encoding: FileSystem.EncodingType.Base64,
-    });
-
-    // Configurar el modo de audio y reproducir
-    await Audio.setAudioModeAsync({ playsInSilentModeIOS: true });
-    const { sound } = await Audio.Sound.createAsync({ uri: fileUri });
-    await sound.playAsync();
-
-    // Limpiar el archivo temporal cuando termine
-    sound.setOnPlaybackStatusUpdate((status) => {
-      if (status.isLoaded && status.didJustFinish) {
-        sound.unloadAsync();
-        FileSystem.deleteAsync(fileUri, { idempotent: true });
+    // Reproducir con react-native-sound
+    activeSound = new Sound(fileUri, '', (error: any) => {
+      if (error) {
+        console.error('[JARVIS] Error cargando Sound:', JSON.stringify(error));
+        fallbackSpeak(text);
+        return;
       }
+
+      activeSound?.play((success) => {
+        if (!success) console.warn('[SpeechService] Reproducción fallida');
+        activeSound?.release();
+        activeSound = null;
+        // NOTA: Ya NO borramos el archivo porque es un caché permanente
+      });
     });
 
-  } catch (error) {
-    console.warn('[SpeechService] ElevenLabs falló, usando fallback:', error);
-    // Fallback al motor del sistema si algo falla
-    Speech.speak(text, { language: 'es', rate: 0.9, pitch: 0.7 });
+    // Auto-release por seguridad (sin borrar archivo)
+    setTimeout(() => {
+      if (activeSound) {
+        activeSound.release();
+        activeSound = null;
+      }
+    }, 60_000);
+
+  } catch (error: any) {
+    console.error('[JARVIS] ERROR TOTAL:', error?.message ?? String(error));
+    fallbackSpeak(text);
   }
 }
 
-function arrayBufferToBase64(buffer: ArrayBuffer): string {
-  const bytes = new Uint8Array(buffer);
-  let binary = '';
-  for (let i = 0; i < bytes.byteLength; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-  return btoa(binary);
+function fallbackSpeak(text: string): void {
+  console.log('[JARVIS] → usando voz del sistema (fallback)');
+  Speech.stop();
+  Speech.speak(text, { language: 'es-US', rate: 0.85, pitch: 0.75 });
 }

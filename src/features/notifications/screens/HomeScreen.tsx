@@ -7,6 +7,7 @@ import { PendingList } from '../components/PendingList';
 import { useTheme, SIZES } from '../../../core/constants/theme';
 import { Text, AlertModal, FAB } from '../../../components/ui';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 
 export function HomeScreen() {
   const {
@@ -31,6 +32,7 @@ export function HomeScreen() {
     closeForm
   } = useNotifications();
   const { colors, toggleTheme, isDark } = useTheme();
+  const router = useRouter();
 
   if (!isReady) {
     return (
@@ -45,13 +47,14 @@ export function HomeScreen() {
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={styles.headerContainer}>
         <Text weight="bold" style={[styles.header, { color: colors.text }]}>Notificador de Tokens</Text>
-        <TouchableOpacity style={styles.themeToggle} onPress={toggleTheme}>
-          <Ionicons 
-            name={isDark ? 'sunny' : 'moon'} 
-            size={SIZES.h2} 
-            color={colors.text} 
-          />
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <TouchableOpacity style={styles.iconButton} onPress={() => router.push('/settings')}>
+            <Ionicons name="settings-outline" size={24} color={colors.text} />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.iconButton} onPress={toggleTheme}>
+            <Ionicons name={isDark ? 'sunny' : 'moon'} size={24} color={colors.text} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <NotificationForm 
@@ -113,8 +116,14 @@ const styles = StyleSheet.create({
     fontSize: SIZES.h2,
     flex: 1,
   },
-  themeToggle: {
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  iconButton: {
     padding: SIZES.base,
     marginLeft: SIZES.base,
+    backgroundColor: 'rgba(128,128,128,0.1)',
+    borderRadius: SIZES.radius,
   },
 });
