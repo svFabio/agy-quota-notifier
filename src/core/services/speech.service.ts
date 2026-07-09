@@ -1,5 +1,15 @@
 import ReactNativeBlobUtil from 'react-native-blob-util';
 import * as Speech from 'expo-speech';
+import { getSettings } from './settings.service';
+
+// Función rápida para hashear el texto y usarlo de nombre de archivo
+function hashCode(str: string): string {
+  let hash = 5381;
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) + hash) + str.charCodeAt(i);
+  }
+  return Math.abs(hash).toString(36);
+}
 
 // Metro a veces empaqueta módulos CommonJS como objetos namespace donde la función constructora es 'default'.
 const Sound = require('react-native-sound');
@@ -8,8 +18,9 @@ Sound.setCategory('Playback', true);
 let activeSound: any = null;
 
 export async function speak(text: string): Promise<void> {
-  const API_KEY = process.env.EXPO_PUBLIC_ELEVENLABS_API_KEY ?? '';
-  const VOICE_ID = process.env.EXPO_PUBLIC_ELEVENLABS_VOICE_ID ?? 'pNInz6obpgDQGcFmaJgB';
+  const settings = await getSettings();
+  const API_KEY = settings.apiKey;
+  const VOICE_ID = settings.voiceId;
 
   if (!API_KEY) {
     console.warn('[SpeechService] Sin API key → fallback');
@@ -18,41 +29,41 @@ export async function speak(text: string): Promise<void> {
   }
 
   try {
-    console.log('[JARVIS] Llamando a ElevenLabs...');
+    const fileUri = `${ReactNativeBlobUtil.fs.dirs.DocumentDir}/jarvis_${VOICE_ID}_${hashCode(text)}.mp3`;
+    const exists = await ReactNativeBlobUtil.fs.exists(fileUri);
 
-    // Usamos ReactNativeBlobUtil.fetch (sin config) — da base64 directo sin problemas de ArrayBuffer
-    const res = await ReactNativeBlobUtil.fetch(
-      'POST',
-      `https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}`,
-      {
-        'xi-api-key': API_KEY,
-        'Content-Type': 'application/json',
-        'Accept': 'audio/mpeg',
-      },
-      JSON.stringify({
-        text,
-        model_id: 'eleven_multilingual_v2',
-        voice_settings: { stability: 0.5, similarity_boost: 0.75 },
-      }),
-    );
+    if (exists) {
+      console.log('[JARVIS] Reproduciendo desde caché (Ahorro de API 💰):', fileUri);
+    } else {
+      console.log('[JARVIS] Llamando a ElevenLabs...');
 
-    const status = res.info().status;
-    console.log('[JARVIS] ElevenLabs status:', status);
+      const res = await ReactNativeBlobUtil.fetch(
+        'POST',
+        `https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}`,
+        {
+          'xi-api-key': API_KEY,
+          'Content-Type': 'application/json',
+          'Accept': 'audio/mpeg',
+        },
+        JSON.stringify({
+          text,
+          model_id: 'eleven_multilingual_v2',
+          voice_settings: { stability: 0.5, similarity_boost: 0.75 },
+        }),
+      );
 
-    if (status !== 200) {
-      throw new Error(`ElevenLabs HTTP ${status}: ${res.text()}`);
+      const status = res.info().status;
+      if (status !== 200) {
+        throw new Error(`ElevenLabs HTTP ${status}: ${res.text()}`);
+      }
+
+      const base64 = res.base64();
+      if (!base64 || base64.length < 100) {
+        throw new Error('Audio base64 vacío o inválido');
+      }
+
+      await ReactNativeBlobUtil.fs.writeFile(fileUri, base64, 'base64');
     }
-
-    // .base64() da el audio directo sin conversiones manuales
-    const base64 = res.base64();
-    console.log('[JARVIS] Audio base64 length:', base64?.length ?? 0);
-
-    if (!base64 || base64.length < 100) {
-      throw new Error('Audio base64 vacío o inválido');
-    }
-
-    const fileUri = `${ReactNativeBlobUtil.fs.dirs.CacheDir}/jarvis_${Date.now()}.mp3`;
-    await ReactNativeBlobUtil.fs.writeFile(fileUri, base64, 'base64');
 
     // Detener sonido anterior
     if (activeSound) {
@@ -71,15 +82,15 @@ export async function speak(text: string): Promise<void> {
         if (!success) console.warn('[SpeechService] Reproducción fallida');
         activeSound?.release();
         activeSound = null;
-        ReactNativeBlobUtil.fs.unlink(fileUri).catch(() => {});
+        // NOTA: Ya NO borramos el archivo porque es un caché permanente
       });
     });
 
+    // Auto-release por seguridad (sin borrar archivo)
     setTimeout(() => {
       if (activeSound) {
         activeSound.release();
         activeSound = null;
-        ReactNativeBlobUtil.fs.unlink(fileUri).catch(() => {});
       }
     }, 60_000);
 
