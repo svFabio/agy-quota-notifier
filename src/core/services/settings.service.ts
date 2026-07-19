@@ -8,8 +8,11 @@ export interface JarvisSettings {
 const SETTINGS_PATH = `${ReactNativeBlobUtil.fs.dirs.DocumentDir}/jarvis_settings.json`;
 
 export const defaultSettings: JarvisSettings = {
-  apiKey: process.env.EXPO_PUBLIC_ELEVENLABS_API_KEY ?? '',
-  voiceId: process.env.EXPO_PUBLIC_ELEVENLABS_VOICE_ID ?? 'pNInz6obpgDQGcFmaJgB',
+  // C-01: Do NOT use EXPO_PUBLIC_ here. EXPO_PUBLIC_ vars are inlined into
+  // the JS bundle at build time and are permanently extractable from the APK.
+  // The API key must come exclusively from the user-saved settings file.
+  apiKey: '',
+  voiceId: 'pNInz6obpgDQGcFmaJgB',
 };
 
 export async function getSettings(): Promise<JarvisSettings> {
@@ -25,5 +28,12 @@ export async function getSettings(): Promise<JarvisSettings> {
 }
 
 export async function saveSettings(settings: JarvisSettings): Promise<void> {
-  await ReactNativeBlobUtil.fs.writeFile(SETTINGS_PATH, JSON.stringify(settings), 'utf8');
+  // C-07: Wrap in try/catch — a disk write failure (full disk, revoked
+  // permissions) must not produce an unhandled rejection that crashes the app.
+  try {
+    await ReactNativeBlobUtil.fs.writeFile(SETTINGS_PATH, JSON.stringify(settings), 'utf8');
+  } catch (error) {
+    console.error('[Settings] Error saving settings', error);
+    throw error; // Re-throw so the UI caller can show feedback.
+  }
 }
