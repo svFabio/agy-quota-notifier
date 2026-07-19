@@ -37,6 +37,9 @@ yarn-error.*
 # typescript
 *.tsbuildinfo
 
+# Secret linter
+.atl/
+
 example
 
 # generated native folders
