@@ -32,8 +32,15 @@ export function useNotifications() {
   const hideAlert = () => setAlertConfig(prev => ({ ...prev, visible: false }));
 
   const handleDelete = async (id: string) => {
-    if (Platform.OS !== 'web') {
-      await Notifications.cancelScheduledNotificationAsync(id);
+    // C-06/C-08: Wrap OS cancel in try/catch — if the notification already
+    // fired or the id is invalid the OS throws, but we still want to clean
+    // up the SQLite record and the UI.
+    try {
+      if (Platform.OS !== 'web') {
+        await Notifications.cancelScheduledNotificationAsync(id);
+      }
+    } catch (e) {
+      console.warn('[useNotifications] OS cancel failed (may have already fired):', e);
     }
     await removeNotification(id);
     setPendingList(prev => prev.filter(n => n.id !== id));
@@ -72,20 +79,27 @@ export function useNotifications() {
     setModel('');
   };
 
-  // Inicializar todo cuando la app carga
+  // Initialize everything when the app loads
   useEffect(() => {
     async function bootstrap() {
       setupNotifications();
       await registerForPushNotificationsAsync();
-      
-      // Inicializar SQLite y cargar datos guardados
+
+      // Initialize SQLite and load saved data
       await initDatabase();
       const savedNotifications = await getPendingNotifications();
       setPendingList(savedNotifications);
       setIsReady(true);
     }
-    
-    bootstrap();
+
+    // C-05: Attach .catch() so any bootstrap failure surfaces a log instead
+    // of silently leaving isReady=false and the spinner running forever.
+    bootstrap().catch((error) => {
+      console.error('[useNotifications] Bootstrap failed:', error);
+      // Still mark ready so the UI doesn't hang forever — it will just have
+      // an empty list and the user can retry by restarting the app.
+      setIsReady(true);
+    });
   }, []);
 
   const handleSchedule = async () => {
@@ -110,8 +124,13 @@ export function useNotifications() {
     const seconds = Math.floor(parsedHours * 3600);
 
     try {
-      if (editingId) {
-        await handleDelete(editingId); // Cancelar la alarma vieja antes de crear la nueva
+      // C-08: Snapshot editingId before the async delete so that if the
+      // delete throws, setEditingId(null) is NOT reached and the edit state
+      // is preserved — the user can retry. The old notification is only
+      // removed if the delete fully succeeds.
+      const idToReplace = editingId;
+      if (idToReplace) {
+        await handleDelete(idToReplace);
         setEditingId(null);
       }
 
